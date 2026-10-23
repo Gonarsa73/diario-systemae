@@ -259,6 +259,8 @@ body.chatmode .toast { bottom: calc(140px + env(safe-area-inset-bottom, 0px)); }
 .welcome ol { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; font-size: 14px; }
 .install { font-size: 13.5px; background: var(--surface-2); border-radius: 14px; padding: 12px 14px; display: flex; flex-direction: column; gap: 6px; }
 .install b { font-weight: 600; }
+.install .istep { display: block; }
+.ishare { width: 18px; height: 18px; vertical-align: -3px; color: #0A84FF; }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
 </style>
 </head>
@@ -561,12 +563,31 @@ body.chatmode .toast { bottom: calc(140px + env(safe-area-inset-bottom, 0px)); }
     return '<section class="card welcome"><h2 class="display" style="font-size:24px">Bienvenida y bienvenido a tu diario</h2>' +
       '<p style="margin:0">Tu doctora te entregó esta app en tu primera consulta para acompañarte entre controles. Aquí anotas lo que comes y ves cuánto llevas en el día.</p>' +
       '<ol><li>Ve a <b>Meta</b> y anota las calorías que te indicó tu doctora.</li><li>Cada vez que comas, cuéntale al asistente qué comiste. Puedes adjuntar una foto como recordatorio.</li><li>Revisa tu semana y llévala a tu próximo control.</li></ol>' +
-      '<div class="install"><b>Déjala en la pantalla de tu celular</b>' +
-      '<span><b>iPhone:</b> abre el enlace en Safari, toca el botón Compartir y elige «Agregar a inicio».</span>' +
-      '<span><b>Android:</b> abre el enlace en Chrome, toca el menú ⋮ y elige «Agregar a la pantalla principal».</span>' +
-      '<span class="muted">Ábrela siempre desde ese ícono: tu diario queda guardado en ese teléfono y funciona sin internet.</span></div>' +
+      installBox() +
       '<button class="btn primary block" data-act="welcomeok">Empezar</button></section>';
   }
+
+  var INST = { prompt: null };
+  function isInstalled() { try { return window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true; } catch (e) { return false; } }
+  function isIOS() { var u = navigator.userAgent || ''; return /iPhone|iPad|iPod/.test(u) || (/Macintosh/.test(u) && navigator.maxTouchPoints > 1); }
+  function installBox() {
+    if (isInstalled()) return '';
+    var share = '<svg class="ishare" viewBox="0 0 24 24" aria-label="Compartir" role="img"><path d="M12 3v12M7.5 7.5 12 3l4.5 4.5M6 11H5v10h14V11h-1" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+    var h = '<div class="install"><b>Deja la app en la pantalla de tu celular</b>';
+    if (INST.prompt) {
+      h += '<span>Así la abres con un toque, como cualquier app.</span><button class="btn primary block" data-act="install">' + IC.plus + 'Instalar app</button>';
+    } else if (isIOS()) {
+      h += '<span class="istep"><b>1.</b> Toca el botón ' + share + ' de Safari (abajo al centro).</span>' +
+        '<span class="istep"><b>2.</b> Baja y toca «Agregar a inicio».</span>' +
+        '<span class="muted">Si no ves el botón, abre este enlace en Safari.</span>';
+    } else {
+      h += '<span class="istep"><b>1.</b> Toca el menú de tres puntos de Chrome (arriba a la derecha).</span>' +
+        '<span class="istep"><b>2.</b> Toca «Instalar app» o «Agregar a la pantalla principal».</span>';
+    }
+    return h + '<span class="muted">Tu diario queda guardado en este teléfono y funciona sin internet.</span></div>';
+  }
+  window.addEventListener('beforeinstallprompt', function (e) { e.preventDefault(); INST.prompt = e; try { render(); } catch (x) {} });
+  window.addEventListener('appinstalled', function () { INST.prompt = null; try { toast('App instalada en tu pantalla de inicio'); render(); } catch (x) {} });
 
   function miniSummary() {
     var t = totals(UI.date), g = S.goal, r = 18, C = 2 * Math.PI * r, pct = Math.min(1, t.kcal / g.kcal), over = t.kcal > g.kcal, rem = g.kcal - t.kcal;
@@ -747,6 +768,7 @@ body.chatmode .toast { bottom: calc(140px + env(safe-area-inset-bottom, 0px)); }
       '<div class="contact-row">' + IC.mail + '<div class="txt"><div class="lbl">Correo</div><div class="val">' + MAIL + '</div></div><button class="btn small" data-act="copy" data-v="' + MAIL + '">Copiar</button></div>' +
       '<div class="contact-row">' + IC.clock + '<div class="txt"><div class="lbl">Horario de atención</div><div class="val">Lunes a viernes, de 09:00 a 18:00</div></div></div>' +
       '</div></section>' +
+      (isInstalled() ? '' : '<section class="card sec">' + installBox() + '</section>') +
       '<div class="notice">' + IC.info + '<p>Este canal no es para urgencias. Si tienes una urgencia de salud, llama al 131 o acude al servicio de urgencia más cercano.</p></div>';
   }
   function render() {
@@ -979,6 +1001,7 @@ body.chatmode .toast { bottom: calc(140px + env(safe-area-inset-bottom, 0px)); }
       case 'undo': if (toast.undo) { toast.undo(); $('#toastRoot').innerHTML = ''; } break;
       case 'calc': calc(); break;
       case 'welcomeok': setWelcomeSeen(); render(); break;
+      case 'install': if (INST.prompt) { var ip = INST.prompt; INST.prompt = null; ip.prompt(); ip.userChoice.then(function () { render(); }).catch(function () {}); } break;
       case 'aihelp':
         pushMsg({ role: 'ai', type: 'text', text: 'Calculo con la tabla de alimentos de la app: porciones típicas chilenas con sus calorías, proteínas, carbohidratos y grasas. Escríbeme qué comiste con cantidades simples, por ejemplo «2 huevos y 1 marraqueta con palta». Si no reconozco algo, búscalo en la lista o anótalo a mano con la etiqueta del envase.\nTodo queda solo en tu teléfono. Las fotos son un recordatorio para ti: no se envían ni se guardan.' });
         render(); scrollEnd(); break;
