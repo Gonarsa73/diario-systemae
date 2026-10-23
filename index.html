@@ -402,7 +402,7 @@ body.chatmode .toast { bottom: calc(140px + env(safe-area-inset-bottom, 0px)); }
   if (!S.chat) S.chat = {};
   function save() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} }
 
-  var UI = { view: 'asistente', date: todayKey };
+  var UI = { view: 'asistente', date: todayKey, range: 'semana' };
   function entriesOf(k) { return S.log[k] || []; }
   function totals(k) {
     return entriesOf(k).reduce(function (a, e) { a.kcal += e.kcal; a.p += e.p; a.c += e.c; a.f += e.f; return a; }, { kcal: 0, p: 0, c: 0, f: 0 });
@@ -436,7 +436,7 @@ body.chatmode .toast { bottom: calc(140px + env(safe-area-inset-bottom, 0px)); }
     return '<p class="privacy">Tu diario se guarda solo en este teléfono. No te pedimos nombre, RUT ni correo, y la app no guarda tus fotos.</p>';
   }
   function renderNav() {
-    var items = [['asistente', 'Asistente', IC.spark], ['hoy', 'Diario', IC.book], ['semana', 'Semana', IC.chart], ['meta', 'Meta', IC.target], ['pauta', 'Pauta', IC.doc], ['contacto', 'Contacto', IC.chat]];
+    var items = [['asistente', 'Asistente', IC.spark], ['hoy', 'Diario', IC.book], ['semana', 'Resumen', IC.chart], ['meta', 'Meta', IC.target], ['pauta', 'Pauta', IC.doc], ['contacto', 'Contacto', IC.chat]];
     $('#nav').innerHTML = items.map(function (it) {
       return '<button class="navbtn" data-act="nav" data-v="' + it[0] + '"' + (UI.view === it[0] ? ' aria-current="page"' : '') + '>' + it[2] + '<span>' + it[1] + '</span></button>';
     }).join('');
@@ -496,32 +496,39 @@ body.chatmode .toast { bottom: calc(140px + env(safe-area-inset-bottom, 0px)); }
   }
 
   function viewSemana() {
-    var days = [], i;
-    for (i = 6; i >= 0; i--) days.push(addDays(todayKey, -i));
-    var data = days.map(function (k) { return { k: k, kcal: totals(k).kcal, n: entriesOf(k).length }; });
+    var mes = UI.range === 'mes', n = mes ? 30 : 7, days = [], i;
+    for (i = n - 1; i >= 0; i--) days.push(addDays(todayKey, -i));
+    var data = days.map(function (k) { var t = totals(k); return { k: k, kcal: t.kcal, p: t.p, c: t.c, f: t.f, n: entriesOf(k).length }; });
     var g = S.goal.kcal, max = Math.max(g * 1.3, Math.max.apply(null, data.map(function (d) { return d.kcal; })) * 1.1);
-    var W = 340, H = 210, pl = 8, pr = 8, pt = 22, pb = 28, cw = W - pl - pr, ch = H - pt - pb, bw = cw / 7;
+    var W = 340, H = 210, pl = 8, pr = 8, pt = 22, pb = 28, cw = W - pl - pr, ch = H - pt - pb, bw = cw / n;
     var y = function (v) { return pt + ch - (v / max) * ch; };
-    var svg = '<svg class="chart" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Calorías de los últimos 7 días comparadas con la meta de ' + fmt(g) + ' kcal">';
+    var svg = '<svg class="chart" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Calorías de los últimos ' + n + ' días comparadas con la meta de ' + fmt(g) + ' kcal">';
     svg += '<line x1="' + pl + '" x2="' + (W - pr) + '" y1="' + y(0) + '" y2="' + y(0) + '" stroke="var(--line)"/>';
     svg += '<line x1="' + pl + '" x2="' + (W - pr) + '" y1="' + y(g) + '" y2="' + y(g) + '" stroke="var(--muted)" stroke-dasharray="4 4"/>';
     svg += '<text x="' + (W - pr) + '" y="' + (y(g) - 5) + '" text-anchor="end">Meta ' + fmt(g) + '</text>';
     data.forEach(function (d, idx) {
       var x = pl + idx * bw + bw * 0.2, w = bw * 0.6, h = Math.max(0, (d.kcal / max) * ch), over = d.kcal > g * 1.1;
       if (d.kcal > 0) {
-        svg += '<rect x="' + x + '" y="' + (y(0) - h) + '" width="' + w + '" height="' + h + '" rx="5" fill="' + (over ? 'var(--over)' : 'var(--brand)') + '"/>';
-        svg += '<text class="val" x="' + (x + w / 2) + '" y="' + (y(0) - h - 4) + '" text-anchor="middle">' + fmt(d.kcal) + '</text>';
+        svg += '<rect x="' + x + '" y="' + (y(0) - h) + '" width="' + w + '" height="' + h + '" rx="' + (mes ? 2 : 5) + '" fill="' + (over ? 'var(--over)' : 'var(--brand)') + '"><title>' + esc(dayLabel(d.k)) + ': ' + fmt(d.kcal) + ' kcal</title></rect>';
+        if (!mes) svg += '<text class="val" x="' + (x + w / 2) + '" y="' + (y(0) - h - 4) + '" text-anchor="middle">' + fmt(d.kcal) + '</text>';
       }
-      svg += '<text x="' + (x + w / 2) + '" y="' + (H - 9) + '" text-anchor="middle">' + dateOf(d.k).toLocaleDateString('es-CL', { weekday: 'short' }).replace('.', '') + '</text>';
+      var lbl = mes ? ((n - 1 - idx) % 5 === 0 ? String(dateOf(d.k).getDate()) : '') : dateOf(d.k).toLocaleDateString('es-CL', { weekday: 'short' }).replace('.', '');
+      if (lbl) svg += '<text x="' + (x + w / 2) + '" y="' + (H - 9) + '" text-anchor="middle">' + lbl + '</text>';
     });
     svg += '</svg>';
     var logged = data.filter(function (d) { return d.n > 0; });
-    var avg = logged.length ? logged.reduce(function (a, d) { return a + d.kcal; }, 0) / logged.length : 0;
+    var avgOf = function (key) { return logged.length ? logged.reduce(function (a, d) { return a + d[key]; }, 0) / logged.length : 0; };
+    var avg = avgOf('kcal');
     var inRange = logged.filter(function (d) { return Math.abs(d.kcal - g) <= g * 0.1; }).length;
-    return '<div class="topbar">' + brandHead('Últimos 7 días') + '</div>' +
-      '<section class="card sec"><h2>Calorías por día</h2>' + svg + '<div class="small muted">Las barras en color cobre superan tu meta por más de 10%. Mira el promedio de la semana más que un día aislado.</div></section>' +
+    var tabs = '<div class="chips" role="radiogroup" aria-label="Periodo">' +
+      '<button class="chip" role="radio" data-act="range" data-v="semana" aria-checked="' + !mes + '">Semana</button>' +
+      '<button class="chip" role="radio" data-act="range" data-v="mes" aria-checked="' + mes + '">Mes</button></div>';
+    return '<div class="topbar">' + brandHead(mes ? 'Últimos 30 días' : 'Últimos 7 días') + '</div>' + tabs +
+      '<section class="card sec"><h2>Calorías por día</h2>' + svg + '<div class="small muted">Las barras en color cobre superan tu meta por más de 10%. Mira el promedio del periodo más que un día aislado.</div></section>' +
       '<section class="stats"><div class="stat"><div class="n">' + (logged.length ? fmt(avg) : '0') + '</div><div class="small muted">kcal promedio en días con registro</div></div>' +
-      '<div class="stat"><div class="n">' + inRange + ' / ' + logged.length + '</div><div class="small muted">días cerca de tu meta (±10%)</div></div></section>' + notice();
+      '<div class="stat"><div class="n">' + inRange + ' / ' + logged.length + '</div><div class="small muted">días cerca de tu meta (±10%)</div></div></section>' +
+      '<section class="card sec"><h2>Promedio diario</h2><div class="small">Proteínas <b>' + fmt(avgOf('p')) + ' g</b> · Carbohidratos <b>' + fmt(avgOf('c')) + ' g</b> · Grasas <b>' + fmt(avgOf('f')) + ' g</b></div>' +
+      '<div class="small muted">' + logged.length + ' de ' + n + ' días con registro. Muéstrale este resumen a tu doctora en tu próximo control.</div></section>' + notice();
   }
 
   function viewMeta() {
@@ -568,9 +575,9 @@ body.chatmode .toast { bottom: calc(140px + env(safe-area-inset-bottom, 0px)); }
   function setWelcomeSeen() { welcomeMem = true; try { localStorage.setItem(KEY + '-bienvenida', '1'); } catch (e) {} }
 
   function welcomeCard() {
-    return '<section class="card welcome"><h2 class="display" style="font-size:24px">Bienvenida y bienvenido a tu diario</h2>' +
+    return '<section class="card welcome"><h2 class="display" style="font-size:24px">Bienvenidos a tu diario</h2>' +
       '<p style="margin:0">Tu doctora te entregó esta app en tu primera consulta para acompañarte entre controles. Aquí anotas lo que comes y ves cuánto llevas en el día.</p>' +
-      '<ol><li>Ve a <b>Meta</b> y anota las calorías que te indicó tu doctora.</li><li>Cada vez que comas, cuéntale al asistente qué comiste. Puedes adjuntar una foto como recordatorio.</li><li>Revisa tu semana y llévala a tu próximo control.</li></ol>' +
+      '<ol><li>Ve a <b>Meta</b> y anota las calorías que te indicó tu doctora.</li><li>Cada vez que comas, cuéntale al asistente qué comiste. Puedes adjuntar una foto como recordatorio.</li><li>Revisa tu <b>Resumen</b> semanal o mensual y muéstraselo a tu doctora en tu próximo control.</li></ol>' +
       installBox() +
       '<button class="btn primary block" data-act="welcomeok">Empezar</button></section>';
   }
@@ -1077,6 +1084,7 @@ body.chatmode .toast { bottom: calc(140px + env(safe-area-inset-bottom, 0px)); }
       case 'undo': if (toast.undo) { toast.undo(); $('#toastRoot').innerHTML = ''; } break;
       case 'calc': calc(); break;
       case 'welcomeok': setWelcomeSeen(); render(); break;
+      case 'range': UI.range = t.getAttribute('data-v'); render(); break;
       case 'pautadel': if (confirm('¿Quitar la pauta de este teléfono?')) pautaDelete(); break;
       case 'install': if (INST.prompt) { var ip = INST.prompt; INST.prompt = null; ip.prompt(); ip.userChoice.then(function () { render(); }).catch(function () {}); } break;
       case 'aihelp':
