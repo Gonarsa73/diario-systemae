@@ -1,0 +1,9 @@
+Diario de Calorías Systémae - versión web gratuita y de libre acceso
+
+Esta carpeta es la app completa. Para publicarla, sube TODOS estos archivos juntos
+(index.html, manifest.webmanifest, sw.js y los íconos .png) a un alojamiento web gratuito
+(GitHub Pages o Netlify). No necesita servidor, base de datos ni claves.
+
+- Sin cuenta para el paciente, sin RUT. El diario queda solo en su teléfono.
+- Funciona sin internet después de abrirla una vez.
+- Las fotos no se envían ni se guardan.
