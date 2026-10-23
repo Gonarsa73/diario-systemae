@@ -1,7 +1,7 @@
 // Diario de Calorías · Systémae — estimador de calorías por foto (Cloudflare Workers AI, plan gratis).
 // No guarda fotos ni datos: recibe la imagen, pide la estimación y devuelve el resultado.
 const ORIGENES = ['https://gonarsa73.github.io'];
-const MODELOS = ['@cf/google/gemma-4-26b-a4b-it', '@cf/meta/llama-4-scout-17b-16e-instruct'];
+const MODELOS = ['@cf/meta/llama-4-scout-17b-16e-instruct', '@cf/google/gemma-4-26b-a4b-it'];
 const MAX_IMAGEN = 1_500_000; // ~1,5 MB en base64
 
 const INSTRUCCION = `Eres un asistente de nutrición de una clínica en Chile. Mira la foto de comida y estima cada alimento visible.
@@ -64,16 +64,20 @@ export default {
       ] }
     ];
 
+    const debug = request.headers.get('X-Debug') === '1';
+    const fallos = [];
     for (const modelo of MODELOS) {
       try {
-        const out = await env.AI.run(modelo, { messages, max_tokens: 700, temperature: 0.2 });
+        const out = await env.AI.run(modelo, { messages, max_tokens: 1500, temperature: 0.2 });
         const texto = out && (out.response ?? (out.choices && out.choices[0] && out.choices[0].message && out.choices[0].message.content));
         const r = extraerJSON(texto);
-        if (r) return json(limpiar(r), 200, origen);
+        if (r) return json(debug ? { ...limpiar(r), modelo } : limpiar(r), 200, origen);
+        fallos.push(modelo + ': sin JSON: ' + String(typeof texto === 'string' ? texto : JSON.stringify(out)).slice(0, 400));
       } catch (e) {
         if (String(e && e.message).includes('4006')) return json({ error: 'limite' }, 429, origen); // cuota diaria gratis agotada
+        fallos.push(modelo + ': ' + String(e && e.message).slice(0, 300));
       }
     }
-    return json({ error: 'ia' }, 502, origen);
+    return json(debug ? { error: 'ia', fallos } : { error: 'ia' }, 502, origen);
   }
 };
